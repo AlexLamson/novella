@@ -1,3 +1,7 @@
+smarter_responder_lambda.py
+*.txt
+*.pkl
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

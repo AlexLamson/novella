@@ -9,7 +9,7 @@ import pickle
 
 # if true, train new model
 # if false, use saved model
-train_model = True
+train_model = False
 
 # bigger number = more accurate, but slower and prone to overfit
 # smaller number = faster, but less accurate
@@ -28,7 +28,7 @@ def argmax(scores):
         if score > curr_max:
             curr_max = score
             curr_i = i
-    return curr_i, score
+    return curr_i, curr_max
 
 
 # class POSifiedText(markovify.Text):
@@ -87,6 +87,7 @@ scores = [score_sentence(input_sentence, proposal) for proposal in not_tqdm(prop
 max_i, max_val = argmax(scores)
 best_sentence = proposals[max_i]
 print(best_sentence)
+print(max_val)
 
 
 # def make_sentence(input_sentence):
