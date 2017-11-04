@@ -75,19 +75,26 @@ else:
 #     print(text_model.make_short_sentence(140))
 
 
-def score_sentence(input_sentence, proposal):
-    a = set(input_sentence.split())
+def score_sentence(input_sentences, proposal):
+    if proposal[-1] == '.': proposal = proposal[:-1] # cut off period so a word at the end of a sentence can be equal to a word in the middle of a sentence
+    proposal = proposal.lower() # similarly, capital words should equal non-capital words
+
+    sentence = input_sentences[-1] # currently just uses the last sentence, but in the future the method could use multiple
+    # clean the sentence as we did before
+    if sentence[-1] == '.': sentence = sentence[:-1]
+    sentence = sentence.lower()
+
+    a = set(input_sentences[-1].split())
     b = proposal.split()
     return 1.0 * len(a.intersection(b)) / len(a.union(b))
 
 # THIS WORKS
 input_sentence = "Malfoy took away Harry's broomstick."
 proposals = [text_model.make_sentence() for i in not_tqdm(range(num_proposals))]
-scores = [score_sentence(input_sentence, proposal) for proposal in not_tqdm(proposals)]
+scores = [score_sentence([input_sentence], proposal) for proposal in not_tqdm(proposals)]
 max_i, max_val = argmax(scores)
 best_sentence = proposals[max_i]
 print(best_sentence)
-print(max_val)
 
 
 # def make_sentence(input_sentence):
