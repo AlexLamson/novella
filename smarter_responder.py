@@ -4,8 +4,15 @@ import markovify
 import pickle
 # import nltk
 # import numpy as np
-# from tqdm import tqdm
 
+'''
+Notable samples
+===============
+Harry's legs were like baby dolphins.
+Harry felt the grin slide off his broomstick.
+His eyes were fixed upon Harry's eardrums.
+Voldemort himself created his worst subject.
+'''
 
 # if true, train new model
 # if false, use saved model
@@ -13,7 +20,24 @@ train_model = False
 
 # bigger number = more accurate, but slower and prone to overfit
 # smaller number = faster, but less accurate
-num_proposals = 200
+num_proposals = 135
+
+use_multiple_books = True
+
+
+if use_multiple_books:
+    filenames = """Harry Potter 1 - Sorcerer's Stone.txt
+Harry Potter 2 - Chamber of Secrets.txt
+Harry Potter 3 - The Prisoner Of Azkaban.txt
+Harry Potter 4 - The Goblet Of Fire.txt
+Harry Potter 5 - Order of the Phoenix.txt
+Harry Potter 6 - The Half Blood Prince.txt
+Harry Potter 7 - Deathly Hollows.txt""".split('\n')
+else:
+    filenames = """Harry Potter 1 - Sorcerer's Stone.txt""".split('\n')
+
+
+stopwords = """a about above after again against all am an and any are aren't as at be because been before being below between both but by can't cannot could couldn't did didn't do does doesn't doing don't down during each few for from further had hadn't has hasn't have haven't having he he'd he'll he's her here here's hers herself him himself his how how's i i'd i'll i'm i've if in into is isn't it it's its itself let's me more most mustn't my myself no nor not of off on once only or other ought our ours  ourselves out over own same shan't she she'd she'll she's should shouldn't so some such than that that's the their theirs them themselves then there there's these they they'd they'll they're they've this those through to too under until up very was wasn't we we'd we'll we're we've were weren't what what's when when's where where's which while who who's whom why why's with won't would wouldn't you you'd you'll you're you've your yours yourself yourselves""".split()
 
 
 def not_tqdm(x):
@@ -28,7 +52,7 @@ def argmax(scores):
         if score > curr_max:
             curr_max = score
             curr_i = i
-    return curr_i, curr_max
+    return curr_i, score
 
 
 # class POSifiedText(markovify.Text):
@@ -43,27 +67,38 @@ def argmax(scores):
 
 
 if train_model:
-    # Get raw text as string.
-    # print("Reading Harry Potter...")
-    with open("Harry Potter 1 - Sorcerer's Stone.txt") as f:
-        text = f.read()
+    from tqdm import tqdm
+    print("training models")
 
-    # Build the model.
-    # print("Training model...")
-    # start = time.time()
-    # text_model = POSifiedText(text)
-    text_model = markovify.Text(text, retain_original=False)
-    # end = time.time()
-    # print("took {:.3f} seconds to create model".format(end - start))
+    my_lovely_models = []
 
-    # Save the model
-    with open('better_model.pkl', 'wb') as f:
-        pickle.dump([text_model, "corgis are cute"], f)
+    for filenum, filename in tqdm(enumerate(filenames), total=len(filenames)):
+        # load the book into memory
+        with open(filename) as f:
+            text = f.read()
+
+        # train markov chain model on it
+        text_model = markovify.Text(text, retain_original=False, state_size = 3)
+
+        # add model to list of models
+        my_lovely_models += [text_model]
+
+        # with open('model_{}.pkl'.format(filenum), 'wb') as f:
+        #     pickle.dump([text_model, "corgis are cute"], f)
+
+    print("merging models")
+    uber_model = markovify.combine(my_lovely_models)
+    with open('multi_book_model.pkl', 'wb') as f:
+        pickle.dump([uber_model, "corgis are cute"], f)
+
 else:
-    # print("Loading model...")
     # Load the model
-    with open('better_model.pkl', 'rb') as f:
-        text_model, pembroke_welsh_corgi = pickle.load(f)
+    if use_multiple_books:
+        with open('multi_book_model.pkl', 'rb') as f:
+            text_model, pembroke_welsh_corgi = pickle.load(f)
+    else:
+        with open('better_model.pkl', 'rb') as f:
+            text_model, pembroke_welsh_corgi = pickle.load(f)
 
 
 # # Print five randomly-generated sentences
@@ -75,26 +110,38 @@ else:
 #     print(text_model.make_short_sentence(140))
 
 
-def score_sentence(input_sentences, proposal):
-    if proposal[-1] == '.': proposal = proposal[:-1] # cut off period so a word at the end of a sentence can be equal to a word in the middle of a sentence
-    proposal = proposal.lower() # similarly, capital words should equal non-capital words
+# don't use stop words in the distance function
+def filter_sentence(sentence):
+    return " ".join([word for word in sentence.split() if (word.lower() not in stopwords)])
 
-    sentence = input_sentences[-1] # currently just uses the last sentence, but in the future the method could use multiple
-    # clean the sentence as we did before
-    if sentence[-1] == '.': sentence = sentence[:-1]
-    sentence = sentence.lower()
 
-    a = set(input_sentences[-1].split())
-    b = proposal.split()
-    return 1.0 * len(a.intersection(b)) / len(a.union(b))
+def score_sentence(input_sentence, proposal):
+    input_sentence = input_sentence.replace(r'[^\w ]+', ' ').replace(r'\s+', ' ').strip()
+    proposal = proposal.replace(r'[^\w ]+', ' ').replace(r'\s+', ' ').strip()
+
+    a = set(filter_sentence(input_sentence).split())
+    b = set(filter_sentence(proposal).split())
+    score = 1.0 * len(a.intersection(b)) / len(a.union(b))
+    if len(b) < 4:
+        score -= (1.0 / len(b))
+    if len(b) > 12:
+        score -= 0.05*len(b)
+        # score -= 0.2
+    return score
+    # denom = max(len(a), len(b))
+    # # return 1.0 * len(a.intersection(b)) / denom
+    # return 1.0 * len(a.intersection(b))
+
 
 # THIS WORKS
 input_sentence = "Malfoy took away Harry's broomstick."
-proposals = [text_model.make_sentence() for i in not_tqdm(range(num_proposals))]
-scores = [score_sentence([input_sentence], proposal) for proposal in not_tqdm(proposals)]
-max_i, max_val = argmax(scores)
-best_sentence = proposals[max_i]
-print(best_sentence)
+print(input_sentence)
+for _ in range(10):
+    proposals = [text_model.make_sentence() for i in not_tqdm(range(num_proposals))]
+    scores = [score_sentence(input_sentence, proposal) for proposal in not_tqdm(proposals)]
+    max_i, max_val = argmax(scores)
+    best_sentence = proposals[max_i]
+    print(best_sentence)
 
 
 # def make_sentence(input_sentence):
