@@ -111,6 +111,9 @@ def filter_sentence(sentence):
 def score_sentence(input_sentences, proposal):
     mask = [1.0, 1.0, 0.75, 0.75, 0.6525, 0.6525]
 
+    # special case, avoid frequent duplicates
+    if proposal in input_sentences: return 0
+
     total = 0
     for i, (sentence, creator) in enumerate(input_sentences):
         total += _score_sentence(sentence, proposal) * mask[i] * (1 if creator is 'human' else 1.0/3)
