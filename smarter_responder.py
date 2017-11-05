@@ -12,6 +12,7 @@ Harry's legs were like baby dolphins.
 Harry felt the grin slide off his broomstick.
 His eyes were fixed upon Harry's eardrums.
 Voldemort himself created his worst subject.
+Harry closed his mind firmly.
 '''
 
 # if true, train new model
@@ -20,10 +21,9 @@ train_model = False
 
 # bigger number = more accurate, but slower and prone to overfit
 # smaller number = faster, but less accurate
-num_proposals = 135
+num_proposals = 500
 
-use_multiple_books = True
-
+use_multiple_books = False
 
 if use_multiple_books:
     filenames = """Harry Potter 1 - Sorcerer's Stone.txt
@@ -109,15 +109,28 @@ def filter_sentence(sentence):
 
 # scores a proposal sentence against a previous set of sentences for relevancy
 def score_sentence(input_sentences, proposal):
-    mask = [1.0, 1.0, 0.75, 0.75, 0.6525, 0.6525]
+    mask = [1.0, 1.0, 0.5, 0.5, 0.25, 0.25]
 
     # special case, avoid frequent duplicates
-    if proposal in input_sentences: return 0
+    if proposal[0] in [sen[0] for sen in input_sentences]: return 0
 
-    total = 0
+    score = 0
     for i, (sentence, creator) in enumerate(input_sentences):
-        total += _score_sentence(sentence, proposal) * mask[i] * (1 if creator is 'human' else 1.0/3)
-    return total
+        score += _score_sentence(sentence, proposal) * mask[i] * (1.0 if creator is 'human' else 1.0/10)
+
+    # factor the length into the score
+    b = set(filter_sentence(proposal).split())
+    if len(b) < 4:
+        score -= (1.0 / len(b))
+    if len(b) > 12:
+        score -= 0.05*(len(b)-10)
+
+
+    # if score > 0:
+    #     print(proposal)
+    #     print(score)
+
+    return score
 
 # helper for score sentence, scores a proposal against a single input sentence
 def _score_sentence(input_sentence, proposal):
@@ -127,32 +140,55 @@ def _score_sentence(input_sentence, proposal):
     a = set(filter_sentence(input_sentence).split())
     b = set(filter_sentence(proposal).split())
     score = 1.0 * len(a.intersection(b)) / len(a.union(b))
-    if len(b) < 4:
-        score -= (1.0 / len(b))
-    if len(b) > 12:
-        score -= 0.05*len(b)
         # score -= 0.2
     return score
-    # denom = max(len(a), len(b))
-    # # return 1.0 * len(a.intersection(b)) / denom
-    # return 1.0 * len(a.intersection(b))
 
 previous_sentences = []
 max_previous_sentences = 6
 
 # THIS WORKS
-input_sentence = "Malfoy took away Harry's broomstick."
-previous_sentences += [(input_sentence, 'human')]
-print(input_sentence)
-for _ in range(10):
+def inputs(input_sentence):
+    global previous_sentences, max_previous_sentences
+
+    if len(previous_sentences) == 0 and 'tell me a story' in input_sentence.lower():
+        from random import random
+        seeds = ["Malfoy took away Harry's broomstick.", "Hermione drank one of Snape's potions.", "Snape needed to talk to Hagrid."]
+        sentence = seeds[int(len(seeds) * random())]
+
+        previous_sentences.insert(0, (sentence, 'bot'))
+
+        return sentence
+
     proposals = [text_model.make_sentence() for i in range(num_proposals)]
+    # print(proposals)
+    previous_sentences.insert(0, (input_sentence, 'human'))
+
     scores = [score_sentence(previous_sentences, proposal) for proposal in proposals]
     best_sentence = proposals[argmax(scores)]
 
     previous_sentences.insert(0, (best_sentence, 'bot'))
-    if (len(previous_sentences) > max_previous_sentences):
+    while (len(previous_sentences) >= max_previous_sentences):
         previous_sentences.pop() # previous_sentences = previous_sentences[:-6]
-    print(best_sentence)
+    return (best_sentence)
+
+demo = False
+if demo:
+    input_sentence = "Malfoy took away Harry's broomstick."
+    # previous_sentences += [(input_sentence, 'human')]
+    print(input_sentence)
+
+    # previous_sentence = input_sentence
+    for _ in range(10):
+        # proposals = [text_model.make_sentence() for i in range(num_proposals)]
+        # scores = [score_sentence(previous_sentences, proposal) for proposal in proposals]
+        # best_sentence = proposals[argmax(scores)]
+        input_sentence = inputs(input_sentence)
+        print(input_sentence)
+
+        # previous_sentences.insert(0, (best_sentence, 'bot'))
+        # if (len(previous_sentences) > max_previous_sentences):
+        #     previous_sentences.pop() # previous_sentences = previous_sentences[:-6]
+        # print(best_sentence)
 
 
 # def make_sentence(input_sentence):
