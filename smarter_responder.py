@@ -114,6 +114,7 @@ def score_sentence(input_sentences, proposal):
     total = 0
     for i, (sentence, creator) in enumerate(input_sentences):
         total += _score_sentence(sentence, proposal) * mask[i] * (1 if creator is 'human' else 1.0/3)
+    return total
 
 # helper for score sentence, scores a proposal against a single input sentence
 def _score_sentence(input_sentence, proposal):
